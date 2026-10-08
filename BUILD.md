@@ -1,61 +1,59 @@
-# IN SITU
+# IN SITU - build and operations notes
 
-A working, anonymous art placement preview for Chas Pulido. Next.js, strict TypeScript, React, Zustand and native Canvas. The Pages preview is compiled from the same React application as a portable static file.
+## What is deployed
 
-## Source
+`index.html` at the repo root is a self-contained build of the full app
+(bundle + styles inlined), published through GitHub Pages. It is produced by:
 
-Decode source.tar.gz.b64 and unpack it to get the editable project:
+    npm install
+    npm run preview:build   # writes preview.html
+    cp preview.html index.html
 
-```sh
-base64 -d source.tar.gz.b64 > source.tar.gz
-mkdir source && tar -xzf source.tar.gz -C source
-cd source
-```
+The real source lives in `src/` (Next.js 16 + React 19 + Zustand, strict
+TypeScript, native Canvas). `source.tar.gz.b64` holds the byte-exact source
+archive; unpack with:
 
-## Run
+    base64 -d source.tar.gz.b64 > in-situ-source.tar.gz
+    tar -xzf in-situ-source.tar.gz
 
-Node 20.9+ is required.
+`npm run dev` runs the Next app; `npm test` runs unit tests;
+`npm run typecheck` must stay clean.
 
-```sh
-npm ci
-npm run dev
-npm run typecheck
-npm test
-npm run build
-```
+## Backend (Supabase, project "Pulido Art")
 
-## Implemented
+- Client talks to Supabase over plain REST with the anon public key in
+  `src/config/product.ts`. The anon key is public by design; all access is
+  enforced by row level security in `supabase/insitu.sql`.
+- The SQL block creates schema `insitu` only: artworks, inquiries,
+  studio_admins, RLS policies, indexes, the private
+  `insitu-visualizations` storage bucket. API schema exposure is configured separately.
+- Studio admins are matched by sign-in email against
+  `insitu.studio_admins` (case-insensitive JWT email match). Only emails in
+  that table are admins. Seed after creating the studio user:
 
-- Editorial landing and responsive room editor.
-- Authentic catalog snapshot from the existing public portfolio, with search, orientation and studio-listing filter. No prices or artwork years are shown.
-- JPEG/PNG/WebP signature validation, 20 MB file limit, decode failure handling, pixel limit and editing-size normalization with orientation correction.
-- Images processed in this tab only. No cloud upload, analytics or third-party AI.
-- Canvas compositing, normalized placement, proportion-preserving corner resize, rotation, touch dragging, pinch zoom, room panning, keyboard/numeric controls, undo/redo.
-- JPEG export at editing resolution with an approximate-scale notice. No claim of full-resolution original export.
-- Remove/replace photograph and cleanup of temporary object URLs.
+      insert into insitu.studio_admins (email) values ('STUDIO-EMAIL-HERE') on conflict do nothing;
 
-## Deliberately not enabled
+- If REST calls return "Invalid schema: insitu" after running the block,
+  add `insitu` under Project Settings > Data API > Exposed schemas,
+  preserve the existing entries, then Save.
 
-Database, admin editing, cloud saving, collector inquiries, cross-device sessions, physical calibration, perspective correction, wall segmentation, occlusion and AI. The admin route denies access and exposes no protected records. This is the working core, not completion of every phase in the master brief.
+## Privacy rules the app keeps
 
-## Artwork provenance and quality
+- Room photos never leave the device unless the collector checks the
+  visualization consent box on the inquiry form.
+- Share links contain only artwork id and placement. Never a photo, never
+  personal data.
+- Inquiries never show prices or availability promises. The studio replies
+  set expectations, not the app.
+- No service-role key anywhere in the app, repo, or messages.
 
-163 catalog entries extracted from the current public pulido-preview repository on October 7, 2026. Dimensions, medium, titles and studio listings are imported, not invented. Availability is a catalog snapshot, not a live inventory reservation. Existing public watermarked images are reused. 24 records have a low-resolution flag. 31 older-watermark works load their existing inline image assets from the public portfolio document. Private clean masters are not published. A studio-approved higher-quality placement-asset pass is needed before final collector launch. Aspect ratios follow the actual source photographs, without cropping content.
+## Status
 
-## Privacy
-
-Room photos are held in memory through local object URLs for this tab. They are not put in localStorage, transmitted or saved remotely. Reloading/closing the tab clears the session. Remove photograph clears this page's reference; this cannot delete files from the user's device. Exported images are intentionally saved to the user's device. The app has no runtime analytics. Loading artwork makes normal image requests to the existing public portfolio host.
-
-## Configuration and later phases
-
-Copy, limits and feature flags: src/config/product.ts. Tokens: src/app/globals.css. Catalog adapter: src/lib/catalog.json. Geometry and history: src/lib/geometry.ts and src/lib/store.ts. Upload pipeline: src/lib/image.ts. Supabase migration proposal lives in supabase/schema.sql and has not been applied. Do not put service-role credentials in this app. Enable a separately reviewed backend, authenticated admin and explicit consent before cloud storage or inquiries.
-
-## Deployment
-
-The preview index.html is a static build of src/standalone.tsx. It contains no private room image, secrets, private inventory notes or clean master files. The base64-encoded source archive contains the editable Next.js project and tests. GitHub Pages serves the root of main. No dependency on a custom domain is baked into the editor.
-
-Rebuild the portable preview with npm run preview:build. For a standard Next.js static export under a repository path, set NEXT_PUBLIC_BASE_PATH=/pulido-in-situ before npm run build and deploy out/. A production server deployment is required before enabling APIs.
-
-## Verification
-
-TypeScript, normalized-coordinate unit tests, catalog provenance assertions and dependency audit pass. Browser checks cover desktop and mobile layouts, room upload, move, rotate, undo/redo, artwork switching, invalid uploads and JPEG download. Real-device Safari/touch and accessibility audit remain release checks.
+- Core placement editor, export, share, inquiry flow, admin shell: live.
+- Inquiry delivery verified against the live project (HTTP 201).
+- Admin sign-in gate and invalid-session denial verified. The account owner
+  must verify her authenticated dashboard, status changes and signed photo links.
+- Email notifications remain off pending a sending identity decision.
+- Not built yet: measurement calibration, perspective correction, cloud
+  sessions, comparison mode, artwork inventory editing UI, email
+  notifications (needs a sending identity decision).
